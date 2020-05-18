@@ -4,20 +4,15 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/scruwys/s3go/internal"
 )
 
 func listCommandHandler(cmd *cobra.Command, args []string) {
-	client := s3go.Client{}
-
-	fmt.Println(
-		fmt.Sprintf("ls command executed: %s", client.Get()),
-	)
+	fmt.Printf("Executing the ls command.")
 }
 
 var listCommand = &cobra.Command{
 	Use:   "ls",
-	Short: "TBD",
+	Short: "List S3 objects and common prefixes under a prefix or all S3 buckets.",
 	Run: listCommandHandler,
 }
 
