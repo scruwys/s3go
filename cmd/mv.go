@@ -1,19 +1,19 @@
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/spf13/cobra"
+    "github.com/spf13/cobra"
+    "github.com/scruwys/s3go/internal"
 )
-
-func moveCommandHandler(cmd *cobra.Command, args []string) {
-	fmt.Printf("Executing the mv command.")
-}
 
 var moveCommand = &cobra.Command{
 	Use:   "mv",
 	Short: "Moves a local file or S3 object to another location locally or in S3.",
+    Args:  cobra.ExactArgs(2),
 	Run: moveCommandHandler,
+}
+
+func moveCommandHandler(cmd *cobra.Command, args []string) {
+	s3go.Echo("Executing the mv command.")
 }
 
 func init() {

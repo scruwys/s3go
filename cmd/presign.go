@@ -1,21 +1,43 @@
 package cmd
 
 import (
-	"fmt"
+    "fmt"
 
-	"github.com/spf13/cobra"
+    "github.com/spf13/cobra"
+    "github.com/scruwys/s3go/internal"
 )
 
-func presignCommandHandler(cmd *cobra.Command, args []string) {
-	fmt.Printf("Executing the presign command.")
+var presignCommand = &cobra.Command{
+    Use:   "presign",
+    Short: "Generate a pre-signed URL for an Amazon S3 object.",
+    Args:  cobra.ExactArgs(1),
+    Run:   presignCommandHandler,
 }
 
-var presignCommand = &cobra.Command{
-	Use:   "presign",
-	Short: "Generate a pre-signed URL for an Amazon S3 object.",
-	Run: presignCommandHandler,
+func presignCommandHandler(cmd *cobra.Command, args []string) {
+    uri, err := s3go.ParseUrl(args[0])
+
+    if err != nil {
+        s3go.ExitWithError(1, err)
+    }
+
+    client := newClientWithPersistentFlags()
+
+    urlStr, err := client.Presign(uri.Bucket, uri.Prefix, flagExpiresIn)
+
+    if err != nil {
+        s3go.ExitWithError(1, err)
+    }
+
+    fmt.Println(urlStr)
 }
 
 func init() {
-	RootCmd.AddCommand(presignCommand)
+    presignCommand.Flags().IntVar(
+        &flagExpiresIn,
+        "expires-in",
+        3600,
+        "Number of seconds until the pre-signed URL expires.")
+
+    RootCmd.AddCommand(presignCommand)
 }

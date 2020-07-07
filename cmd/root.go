@@ -1,19 +1,33 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
+    "github.com/spf13/cobra"
+    "github.com/scruwys/s3go/internal"
 )
 
 const (
     defaultEndpointUrl = "s3.amazonaws.com"
 )
 
-// Flags
+// Persistent Flags
 var Debug bool
 var Endpoint string
 var VerifySSL bool
 var Profile string
 var Region string
+
+// Local Flags
+var flagConcurrency int
+var flagDryRun bool
+var flagExpiresIn int
+var flagForce bool
+var flagHumanReadable bool
+var flagExcludeFilter string
+var flagIncludeFilter string
+var flagQuiet bool
+var flagRecursive bool
+var flagRequestPayer string
+var flagSummarize bool
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
@@ -21,13 +35,18 @@ var RootCmd = &cobra.Command{
 	Short: "golang cli for interacting with aws s3.",
 }
 
-func init() {
-	RootCmd.PersistentFlags().BoolVar(
-		&Debug,
-		"debug",
-		false,
-		"Turn on debug logging.")
+// Make a new s3go.Client using the default persistent flags
+func newClientWithPersistentFlags() *s3go.Client {
+    return s3go.NewClient(&s3go.ClientOptions{
+        Endpoint:   Endpoint,
+        Debug:      Debug,
+        Profile:    Profile,
+        Region:     Region,
+        DisableSSL: !VerifySSL,
+    })
+}
 
+func init() {
 	RootCmd.PersistentFlags().StringVar(
 		&Endpoint,
 		"endpoint-url",
@@ -35,10 +54,10 @@ func init() {
 		"Override command's default URL with the given URL.")
 
 	RootCmd.PersistentFlags().BoolVar(
-		&VerifySSL,
-		"no-verify-ssl",
+		&Debug,
+		"debug",
 		false,
-		"This option overrides the default behavior of verifying SSL certificates.")
+		"Turn on debug logging.")
 
 	RootCmd.PersistentFlags().StringVar(
 		&Profile,
@@ -49,7 +68,12 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(
 		&Region,
 		"region",
-		"",
+		"us-east-1",
 		"The region to use. Overrides config/env settings.")
 
+	RootCmd.PersistentFlags().BoolVar(
+		&VerifySSL,
+		"no-verify-ssl",
+		false,
+		"This option overrides the default behavior of verifying SSL certificates.")
 }
