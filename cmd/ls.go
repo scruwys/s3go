@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"strings"
+	"path/filepath"
 
     "github.com/spf13/cobra"
     "github.com/scruwys/s3go/internal"
@@ -50,8 +51,13 @@ func listCommandHandler(cmd *cobra.Command, args []string) {
 
     	ts := object.LastModified.Format("2006-01-02 15:04:05")
     	sz := s3go.ByteSizeToString(*object.Size, flagHumanReadable)
+    	ok := *object.Key
 
-	    s3go.Echo("%s %11s %s", ts, sz, strings.Replace(*object.Key, uri.Prefix, "", -1))
+    	if !flagRecursive {
+    		ok = filepath.Base(*object.Key)
+    	}
+
+	    s3go.Echo("%s %11s %s", ts, sz, ok)
 
 	    objectSz += *object.Size
 	    objectCt += 1

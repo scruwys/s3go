@@ -91,3 +91,4 @@ func listFiles(rootPath string, recursive bool, excludeFilter string, includeFil
 
     return outputCh, nil
 }
+

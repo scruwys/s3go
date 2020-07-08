@@ -164,13 +164,16 @@ func(c *Client) DeleteObject(bucketName, key, requestPayer string) error {
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_download_object.go
-func(c *Client) DownloadObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
-    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
-
-    sourcePath := fmt.Sprintf("s3://%s", object.Path())
+func(c *Client) DownloadObject(object ObjectInfo, targetPrefix string, options *MoveObjectOptions) (string, error) {
+    sourcePath := fmt.Sprintf("s3://%s/%s", options.Source.Bucket, *object.Key)
     targetPath := fmt.Sprintf("%s", targetPrefix)
+    logMessage := fmt.Sprintf("%s to %s", sourcePath, targetPath)
 
-    file, err := createFile(targetPath)
+    if options.DryRun {
+        return logMessage, nil
+    }
+
+    file, err := createFile(targetPrefix)
 
     if err != nil {
         return "", err
@@ -179,22 +182,35 @@ func(c *Client) DownloadObject(object ObjectInfo, source *S3Url, target *S3Url, 
     defer file.Close()
 
     _, err = c.downloader.Download(file, &s3.GetObjectInput{
-        Bucket: aws.String(source.Bucket),
-        Key:    aws.String(sourcePath),
+        Bucket: aws.String(options.Source.Bucket),
+        Key:    aws.String(*object.Key),
     })
 
-    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
+    if err != nil {
+        return "", err
+    }
 
-    return "", nil
+    if options.DeleteAfter {
+        err = c.DeleteObject(options.Source.Bucket, *object.Key, options.RequestPayer)
+
+        if err != nil {
+            return "", err
+        }
+    }
+
+    return logMessage, nil
 }
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_upload_object.go
-func(c *Client) UploadObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
-    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
-
+func(c *Client) UploadObject(object ObjectInfo, targetPrefix string, options *MoveObjectOptions) (string, error) {
     sourcePath := fmt.Sprintf("%s", object.Path())
-    targetPath := fmt.Sprintf("s3://%s/%s", target.Bucket, targetPrefix)
+    targetPath := fmt.Sprintf("s3://%s/%s", options.Target.Bucket, targetPrefix)
+    logMessage := fmt.Sprintf("%s to %s", sourcePath, targetPath)
+
+    if options.DryRun {
+        return logMessage, nil
+    }
 
     file, err := os.Open(sourcePath)
 
@@ -205,26 +221,41 @@ func(c *Client) UploadObject(object ObjectInfo, source *S3Url, target *S3Url, re
     defer file.Close()
 
     _, err = c.uploader.Upload(&s3manager.UploadInput{
-        Bucket:     aws.String(target.Bucket),
+        Bucket:     aws.String(options.Target.Bucket),
         Key:        aws.String(targetPrefix),
         Body:       file,
     })
 
-    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
-    return "", err
+    if err != nil {
+        return "", err
+    }
+
+    if options.DeleteAfter {
+        err = os.Remove(sourcePath)
+
+        if err != nil {
+            return "", err
+        }
+    }
+
+    return logMessage, nil
 }
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_copy_object.go
-func(c *Client) CopyObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
-    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
-
+func(c *Client) CopyObject(object ObjectInfo, targetPrefix string, options *MoveObjectOptions) (string, error) {
     sourcePath := fmt.Sprintf("s3://%s", object.Path())
-    targetPath := fmt.Sprintf("s3://%s/%s", target.Bucket, targetPrefix)
+    targetPath := fmt.Sprintf("s3://%s/%s", options.Target.Bucket, targetPrefix)
+
+    logMessage := fmt.Sprintf("%s to %s", sourcePath, targetPath)
+
+    if options.DryRun {
+        return logMessage, nil
+    }
 
     _, err := c.svc.CopyObject(&s3.CopyObjectInput{
         CopySource: aws.String(object.Path()),
-        Bucket:     aws.String(target.Bucket),
+        Bucket:     aws.String(options.Target.Bucket),
         Key:        aws.String(targetPrefix),
     })
 
@@ -233,7 +264,7 @@ func(c *Client) CopyObject(object ObjectInfo, source *S3Url, target *S3Url, recu
     }
 
     err = c.svc.WaitUntilObjectExists(&s3.HeadObjectInput{
-        Bucket: aws.String(target.Bucket),
+        Bucket: aws.String(options.Target.Bucket),
         Key:    aws.String(targetPrefix),
     })
 
@@ -241,22 +272,39 @@ func(c *Client) CopyObject(object ObjectInfo, source *S3Url, target *S3Url, recu
         return "", err
     }
 
-    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
-    return "", nil
+    if options.DeleteAfter {
+        err = c.DeleteObject(*object.Bucket, *object.Key, options.RequestPayer)
+
+        if err != nil {
+            return "", err
+        }
+    }
+
+    return logMessage, nil
 }
 
-// TODO(scruwys)
-func(c *Client) MoveObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
-    if !source.IsLocal() && target.IsLocal() {
-        return c.DownloadObject(object, source, target, recursive)
+type MoveObjectOptions struct {
+    Target       *S3Url
+    Source       *S3Url
+    DryRun       bool
+    Recursive    bool
+    RequestPayer string
+    DeleteAfter  bool
+}
+
+func(c *Client) MoveObject(object ObjectInfo, options *MoveObjectOptions) (string, error) {
+    targetPrefix := buildTargetPrefix(options.Target.Prefix, options.Source.Prefix, *object.Key, options.Recursive)
+
+    if !options.Source.IsLocal() && options.Target.IsLocal() {
+        return c.DownloadObject(object, targetPrefix, options)
     }
 
-    if !source.IsLocal() && !target.IsLocal() {
-        return c.CopyObject(object, source, target, recursive)
+    if !options.Source.IsLocal() && !options.Target.IsLocal() {
+        return c.CopyObject(object, targetPrefix, options)
     }
 
-    if source.IsLocal() && !target.IsLocal() {
-        return c.UploadObject(object, source, target, recursive)
+    if options.Source.IsLocal() && !options.Target.IsLocal() {
+        return c.UploadObject(object, targetPrefix, options)
     }
 
     return "", errors.New("This action is not supported.")
