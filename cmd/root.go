@@ -1,12 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+
     "github.com/spf13/cobra"
     "github.com/scruwys/s3go/internal"
-)
-
-const (
-    defaultEndpointUrl = "s3.amazonaws.com"
 )
 
 // Persistent Flags
@@ -37,6 +35,10 @@ var RootCmd = &cobra.Command{
 
 // Make a new s3go.Client using the default persistent flags
 func newClientWithPersistentFlags() *s3go.Client {
+	if Endpoint == "" {
+		Endpoint = s3go.DEFAULT_ENDPOINT_URL
+	}
+
     return s3go.NewClient(&s3go.ClientOptions{
         Endpoint:   Endpoint,
         Debug:      Debug,
@@ -46,11 +48,28 @@ func newClientWithPersistentFlags() *s3go.Client {
     })
 }
 
+// Overrides some flags to pull the region from the bucket
+func newClientWithRegionFromBucket(bucketName string) *s3go.Client {
+    region, err := s3go.GetBucketRegion(bucketName)
+
+    if err != nil {
+        s3go.ExitWithError(1, err)
+    }
+
+    Region = region
+
+    if Endpoint == "" {
+		Endpoint = fmt.Sprintf("s3.%s.amazonaws.com", region)
+    }
+
+    return newClientWithPersistentFlags()
+}
+
 func init() {
 	RootCmd.PersistentFlags().StringVar(
 		&Endpoint,
 		"endpoint-url",
-		defaultEndpointUrl,
+		"",
 		"Override command's default URL with the given URL.")
 
 	RootCmd.PersistentFlags().BoolVar(

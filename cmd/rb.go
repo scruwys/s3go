@@ -20,7 +20,7 @@ func removeBucketCommandHandler(cmd *cobra.Command, args []string) {
         s3go.ExitWithError(1, err)
     }
 
-    client := newClientWithPersistentFlags()
+    client := newClientWithRegionFromBucket(uri.Bucket)
 
     if err = client.RemoveBucket(uri.Bucket, flagForce); err != nil {
         s3go.ExitWithError(1, err)

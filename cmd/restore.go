@@ -19,7 +19,7 @@ func restoreCommandHandler(cmd *cobra.Command, args []string) {
         s3go.ExitWithError(1, err)
     }
 
-    client := newClientWithPersistentFlags()
+    client := newClientWithRegionFromBucket(uri.Bucket)
     doneCh := make(chan bool)
 
     objectCh, err := client.ListObjectsV2(&s3go.ListObjectsV2Input{

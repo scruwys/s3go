@@ -4,6 +4,7 @@ import (
     "time"
     "fmt"
     "errors"
+    "os"
 
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
@@ -15,11 +16,15 @@ type Client struct {
     // Authenticated S3 client to make API requests
     svc *s3.S3
 
-    // Turn on debug logging
-    debug bool
+    // TBD...
+    sess *session.Session
 
-    // Specifies the AWS Region where the API actions will be scoped to
-    region string
+    // Original options used to configure the client
+    options *ClientOptions
+
+    uploader *s3manager.Uploader
+
+    downloader *s3manager.Downloader
 }
 
 type ClientOptions struct {
@@ -40,6 +45,20 @@ type ClientOptions struct {
 }
 
 func NewClient(options *ClientOptions) *Client {
+    sess, _ := session.NewSessionWithOptions(session.Options{
+        Profile: options.Profile,
+    })
+
+    svc := s3.New(sess, NewConfig(options))
+
+    uploader := s3manager.NewUploaderWithClient(svc)
+
+    downloader := s3manager.NewDownloaderWithClient(svc)
+
+    return &Client{svc, sess, options, uploader, downloader}
+}
+
+func NewConfig(options *ClientOptions) *aws.Config {
     cfg := &aws.Config{
         Endpoint:   &options.Endpoint,
         DisableSSL: &options.DisableSSL,
@@ -49,17 +68,7 @@ func NewClient(options *ClientOptions) *Client {
         cfg = cfg.WithRegion(options.Region)
     }
 
-    sess, _ := session.NewSessionWithOptions(session.Options{
-        Profile: options.Profile,
-    })
-
-    svc := s3.New(sess, cfg)
-
-    return &Client{
-        svc:    svc,
-        debug:  options.Debug,
-        region: options.Region,
-    }
+    return cfg
 }
 
 // Generates a pre-signed URL for an Amazon S3 object
@@ -98,10 +107,17 @@ func(c *Client) MakeBucket(bucketName, region string) error {
 // Removes an S3 bucket if it  exists within the context of the current session.
 func(c *Client) RemoveBucket(bucketName string, forceFlag bool) error {
     if (forceFlag) {
+        fmt.Println("Emptying the bucket. This might take a few minutes.")
         return c.EmptyBucket(bucketName)
     }
 
-    _, err := c.svc.DeleteBucket(&s3.DeleteBucketInput{
+    // We override the session since it's best to delete buckets from the main S3 endpoint.
+    svc := s3.New(c.sess, NewConfig(&ClientOptions{
+        Endpoint: fmt.Sprintf(DEFAULT_ENDPOINT_URL),
+        Region:   c.options.Region,
+    }))
+
+    _, err := svc.DeleteBucket(&s3.DeleteBucketInput{
         Bucket: aws.String(bucketName),
     })
 
@@ -109,19 +125,12 @@ func(c *Client) RemoveBucket(bucketName string, forceFlag bool) error {
         return err
     }
 
-    err = c.svc.WaitUntilBucketNotExists(&s3.HeadBucketInput{
+    err = svc.WaitUntilBucketNotExists(&s3.HeadBucketInput{
         Bucket: aws.String(bucketName),
     })
 
     return err
 }
-
-// Checks to see if an S3 bucket exists within the context of the current session.
-func(c *Client) BucketExists(bucketName string) error {
-    _, err := c.svc.HeadBucket(&s3.HeadBucketInput{Bucket: aws.String(bucketName)})
-    return err
-}
-
 // Empty an entire S3 bucket using batch DeleteObjects API operations.
 func(c *Client) EmptyBucket(bucketName string) error {
     iter := s3manager.NewDeleteListIterator(c.svc, &s3.ListObjectsInput{
@@ -155,40 +164,102 @@ func(c *Client) DeleteObject(bucketName, key, requestPayer string) error {
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_download_object.go
-func(c *Client) DownloadObject(object ObjectInfo, target *S3Url, keepSourceFlag bool) error {
-    fmt.Println("DownloadObject: ", *object.Key)
-    return nil
+func(c *Client) DownloadObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
+    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
+
+    sourcePath := fmt.Sprintf("s3://%s", object.Path())
+    targetPath := fmt.Sprintf("%s", targetPrefix)
+
+    file, err := createFile(targetPath)
+
+    if err != nil {
+        return "", err
+    }
+
+    defer file.Close()
+
+    _, err = c.downloader.Download(file, &s3.GetObjectInput{
+        Bucket: aws.String(source.Bucket),
+        Key:    aws.String(sourcePath),
+    })
+
+    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
+
+    return "", nil
 }
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_upload_object.go
-func(c *Client) UploadObject(object ObjectInfo, target *S3Url, keepSourceFlag bool) error {
-    fmt.Println("UploadObject: ", *object.Key)
-    return nil
+func(c *Client) UploadObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
+    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
+
+    sourcePath := fmt.Sprintf("%s", object.Path())
+    targetPath := fmt.Sprintf("s3://%s/%s", target.Bucket, targetPrefix)
+
+    file, err := os.Open(sourcePath)
+
+    if err != nil {
+        return "", err
+    }
+
+    defer file.Close()
+
+    _, err = c.uploader.Upload(&s3manager.UploadInput{
+        Bucket:     aws.String(target.Bucket),
+        Key:        aws.String(targetPrefix),
+        Body:       file,
+    })
+
+    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
+    return "", err
 }
 
 // TODO(scruwys)
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/master/go/example_code/s3/s3_copy_object.go
-func(c *Client) CopyObject(object ObjectInfo, target *S3Url, keepSourceFlag bool) error {
-    fmt.Println("CopyObject: ", *object.Key)
-    return nil
+func(c *Client) CopyObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
+    targetPrefix := buildTargetPrefix(target.Prefix, source.Prefix, *object.Key, recursive)
+
+    sourcePath := fmt.Sprintf("s3://%s", object.Path())
+    targetPath := fmt.Sprintf("s3://%s/%s", target.Bucket, targetPrefix)
+
+    _, err := c.svc.CopyObject(&s3.CopyObjectInput{
+        CopySource: aws.String(object.Path()),
+        Bucket:     aws.String(target.Bucket),
+        Key:        aws.String(targetPrefix),
+    })
+
+    if err != nil {
+        return "", err
+    }
+
+    err = c.svc.WaitUntilObjectExists(&s3.HeadObjectInput{
+        Bucket: aws.String(target.Bucket),
+        Key:    aws.String(targetPrefix),
+    })
+
+    if err != nil {
+        return "", err
+    }
+
+    fmt.Println(fmt.Sprintf("copy: %s to %s", sourcePath, targetPath))
+    return "", nil
 }
 
 // TODO(scruwys)
-func(c *Client) MoveObject(object ObjectInfo, source *S3Url, target *S3Url, keepSourceFlag bool) error {
+func(c *Client) MoveObject(object ObjectInfo, source *S3Url, target *S3Url, recursive bool) (string, error) {
     if !source.IsLocal() && target.IsLocal() {
-        return c.DownloadObject(object, target, keepSourceFlag)
+        return c.DownloadObject(object, source, target, recursive)
     }
 
     if !source.IsLocal() && !target.IsLocal() {
-        return c.CopyObject(object, target, keepSourceFlag)
+        return c.CopyObject(object, source, target, recursive)
     }
 
     if source.IsLocal() && !target.IsLocal() {
-        return c.UploadObject(object, target, keepSourceFlag)
+        return c.UploadObject(object, source, target, recursive)
     }
 
-    return errors.New("This action is not supported.")
+    return "", errors.New("This action is not supported.")
 }
 
 type ObjectInfo struct {
@@ -216,6 +287,14 @@ type ObjectInfo struct {
     Bucket *string `type:"string"`
 }
 
+func (o *ObjectInfo) Path() string {
+    delimiter := "/"
+    if *o.Bucket == "" {
+        delimiter = ""
+    }
+    return fmt.Sprintf("%s%s%s", *o.Bucket, delimiter, *o.Key)
+}
+
 type ListObjectsV2Input struct {
     // The name of the Amazon S3 bucket you want to list
     Bucket string
@@ -241,8 +320,34 @@ func(c *Client) ListObjectsV2(options *ListObjectsV2Input) (ch <-chan ObjectInfo
         delimiter = "/"
     }
 
-    if err := c.BucketExists(options.Bucket); err != nil {
+    region, err := GetBucketRegion(options.Bucket)
+
+    if err != nil {
         return nil, err
+    }
+
+    // We override the session to list objects from whatever target bucket.
+    svc := s3.New(c.sess, NewConfig(&ClientOptions{
+        Endpoint: fmt.Sprintf("s3.%s.amazonaws.com", region),
+        Region:   region,
+    }))
+
+    if !options.Recursive {
+        emptyCh := make(chan ObjectInfo)
+        defer close(emptyCh)
+
+        if options.Prefix == "" {
+            return emptyCh, nil
+        }
+
+        _, err := svc.HeadObject(&s3.HeadObjectInput{
+            Bucket: aws.String(options.Bucket),
+            Key:    aws.String(options.Prefix),
+        })
+
+        if err != nil {
+            return nil, err
+        }
     }
 
     input := &s3.ListObjectsV2Input{
@@ -251,12 +356,22 @@ func(c *Client) ListObjectsV2(options *ListObjectsV2Input) (ch <-chan ObjectInfo
         Delimiter: aws.String(delimiter),
     }
 
+    excludeRe, err := regexpCompile(options.ExcludeFilter, "$^")
+    if err != nil {
+        return nil, err
+    }
+
+    includeRe, err := regexpCompile(options.IncludeFilter, ".*")
+    if err != nil {
+        return nil, err
+    }
+
     outputCh := make(chan ObjectInfo)
 
     go func() {
         defer close(outputCh)
 
-        c.svc.ListObjectsV2Pages(input, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
+        svc.ListObjectsV2Pages(input, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
             for _, prefix := range page.CommonPrefixes {
                 objectInfo := ObjectInfo{
                     Bucket:       &options.Bucket,
@@ -269,10 +384,14 @@ func(c *Client) ListObjectsV2(options *ListObjectsV2Input) (ch <-chan ObjectInfo
             }
 
             for _, object := range page.Contents {
+                if excludeRe.MatchString(*object.Key) || !includeRe.MatchString(*object.Key) {
+                    continue
+                }
+                objectKey := *object.Key
                 objectInfo := ObjectInfo{
                     Bucket:       &options.Bucket,
                     Key:          object.Key,
-                    IsPrefix:     false,
+                    IsPrefix:     objectKey[len(objectKey)-1:] == "/",
                     Size:         object.Size,
                     LastModified: object.LastModified,
                 }
@@ -303,7 +422,7 @@ type ListSourceObjectsInput struct {
 // List source objects from either S3 or the local file system. Used for "cp" and "mv" commands, etc.
 func(c *Client) ListSourceObjects(options *ListSourceObjectsInput) (ch <-chan ObjectInfo, err error) {
     if options.SourceUrl.IsLocal() {
-        return listFiles(options.SourceUrl.Prefix, options.Recursive)
+        return listFiles(options.SourceUrl.Prefix, options.Recursive, options.ExcludeFilter, options.IncludeFilter)
     }
 
     input := &ListObjectsV2Input{

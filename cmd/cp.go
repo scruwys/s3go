@@ -26,7 +26,13 @@ func copyCommandHandler(cmd *cobra.Command, args []string) {
         s3go.ExitWithError(1, err)
     }
 
-    client := newClientWithPersistentFlags()
+    bucket := target.Bucket
+
+    if target.IsLocal() {
+        bucket = source.Bucket
+    }
+
+    client := newClientWithRegionFromBucket(bucket)
     doneCh := make(chan bool)
 
     objectCh, err := client.ListSourceObjects(&s3go.ListSourceObjectsInput{
@@ -40,13 +46,7 @@ func copyCommandHandler(cmd *cobra.Command, args []string) {
         s3go.ExitWithError(1, err)
     }
 
-    workerInput := &copyCommandWorkerInput{
-        objectCh: objectCh,
-        doneCh:   doneCh,
-        source:   source,
-        target:   target,
-    }
-
+    workerInput := &copyCommandWorkerInput{objectCh, doneCh, source, target}
     workers := make([]<-chan s3go.ObjectInfo, flagConcurrency)
 
     for i := 0; i < flagConcurrency; i++ {
@@ -74,6 +74,12 @@ type copyCommandWorkerInput struct {
 
 func copyCommandWorker(client *s3go.Client, input *copyCommandWorkerInput) <-chan s3go.ObjectInfo {
     resultCh := make(chan s3go.ObjectInfo)
+    // We append this to output when we are doing a dry run.
+    dryRunPrefix := ""
+
+    if flagDryRun {
+        dryRunPrefix = "(dryrun) "
+    }
 
     go func() {
         defer close(resultCh)
@@ -82,8 +88,22 @@ func copyCommandWorker(client *s3go.Client, input *copyCommandWorkerInput) <-cha
                 case <-input.doneCh:
                     return
                 case resultCh <- item:
-                    if !item.IsPrefix {
-                        client.MoveObject(item, input.source, input.target, true)
+                    if item.IsPrefix {
+                        continue
+                    }
+
+                    err := error(nil)
+
+                    if !flagDryRun {
+                        _, err := client.MoveObject(item, input.source, input.target, flagRecursive)
+
+                        if err != nil {
+                            s3go.Echo("%v", err)
+                        }
+                    }
+
+                    if true == false && err == nil && !flagQuiet {
+                        s3go.Echo("%scopy: s3://%s/%s", dryRunPrefix, *item.Bucket, *item.Key)
                     }
             }
         }

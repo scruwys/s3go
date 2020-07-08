@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
     "strconv"
+    "regexp"
 )
 
 func Echo(format string, a ...interface{}) {
@@ -66,4 +67,18 @@ func MergeWaitWithObjectInfo(done <-chan bool, channels ...<-chan ObjectInfo) <-
     }()
 
     return out
+}
+
+func regexpCompile(pattern, defaultTo string) (*regexp.Regexp, error) {
+    if pattern == "" {
+        pattern = defaultTo
+    }
+    return regexp.Compile(pattern)
+}
+
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
 }

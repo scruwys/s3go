@@ -20,7 +20,7 @@ func removeCommandHandler(cmd *cobra.Command, args []string) {
         s3go.ExitWithError(1, err)
     }
 
-    client := newClientWithPersistentFlags()
+    client := newClientWithRegionFromBucket(uri.Bucket)
     doneCh := make(chan bool)
 
     objectCh, err := client.ListObjectsV2(&s3go.ListObjectsV2Input{
@@ -57,10 +57,8 @@ type removeCommandWorkerInput struct {
 
 func removeCommandWorker(client *s3go.Client, input *removeCommandWorkerInput) <-chan s3go.ObjectInfo {
     resultCh := make(chan s3go.ObjectInfo)
-
     // We append this to output when we are doing a dry run.
     dryRunPrefix := ""
-
     if flagDryRun {
         dryRunPrefix = "(dryrun) "
     }

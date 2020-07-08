@@ -1,17 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/scruwys/s3go/cmd"
+	"github.com/scruwys/s3go/internal"
 )
+
 
 func main() {
 	err := cmd.RootCmd.Execute()
 
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		s3go.ExitWithError(1, err)
 	}
 }
