@@ -15,13 +15,19 @@ var Profile string
 var Region string
 
 // Local Flags
+var flagACL string
 var flagConcurrency int
+var flagContentDisposition string
+var flagContentEncoding string
+var flagContentLanguage string
+var flagContentType string
 var flagDryRun bool
+var flagExcludeFilter string
 var flagExpiresIn int
 var flagForce bool
 var flagHumanReadable bool
-var flagExcludeFilter string
 var flagIncludeFilter string
+var flagOnlyShowErrors bool
 var flagQuiet bool
 var flagRecursive bool
 var flagRequestPayer string

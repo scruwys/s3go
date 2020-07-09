@@ -26,7 +26,6 @@ func ensureDir(dirName string) error {
     }
 }
 
-
 func createFile(path string) (*os.File, error) {
     dir, _ := filepath.Split(path)
 
@@ -36,7 +35,6 @@ func createFile(path string) (*os.File, error) {
 
     return os.Create(path)
 }
-
 
 func listFiles(rootPath string, recursive bool, excludeFilter string, includeFilter string) (ch <-chan ObjectInfo, err error) {
     outputCh := make(chan ObjectInfo)

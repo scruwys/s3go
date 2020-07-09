@@ -1,6 +1,7 @@
 package cmd
 
 import (
+    "github.com/spf13/cobra"
     "github.com/scruwys/s3go/internal"
 )
 
@@ -88,19 +89,24 @@ func transferCommandWorker(client *s3go.Client, input *transferCommandWorkerInpu
                     }
 
                     logMessage, err := client.MoveObject(item, &s3go.MoveObjectOptions{
-                        Target:       input.target,
-                        Source:       input.source,
-                        Recursive:    flagRecursive,
-                        RequestPayer: flagRequestPayer,
-                        DryRun:       flagDryRun,
-                        DeleteAfter:  input.deleteAfter,
+                        Target:             input.target,
+                        Source:             input.source,
+                        DeleteAfter:        input.deleteAfter,
+                        ACL:                flagACL,
+                        ContentDisposition: flagContentDisposition,
+                        ContentEncoding:    flagContentEncoding,
+                        ContentLanguage:    flagContentLanguage,
+                        ContentType:        flagContentType,
+                        DryRun:             flagDryRun,
+                        Recursive:          flagRecursive,
+                        RequestPayer:       flagRequestPayer,
                     })
 
                     if err != nil {
                         s3go.Echo("%v", err)
                     }
 
-                    if  err == nil && !flagQuiet {
+                    if  err == nil && !flagQuiet && !flagOnlyShowErrors {
                         s3go.Echo("%s%s: %s", dryRunPrefix, input.desc, logMessage)
                     }
             }
@@ -108,4 +114,84 @@ func transferCommandWorker(client *s3go.Client, input *transferCommandWorkerInpu
     }()
 
     return resultCh
+}
+
+func addTransferFlags(command *cobra.Command) {
+    command.Flags().BoolVar(
+        &flagDryRun,
+        "dryrun",
+        false,
+        "Displays the operations that would be performed using the specified command without actually running them.")
+
+    command.Flags().BoolVar(
+        &flagQuiet,
+        "quiet",
+        false,
+        "Does not display the operations performed from the specified command.")
+
+    command.Flags().BoolVar(
+        &flagRecursive,
+        "recursive",
+        false,
+        "Command is performed on all files or objects under the specified directory or prefix.")
+
+    command.Flags().StringVar(
+        &flagIncludeFilter,
+        "include",
+        "",
+        "Don't exclude files or objects in the command that match the specified pattern.")
+
+    command.Flags().StringVar(
+        &flagExcludeFilter,
+        "exclude",
+        "",
+        "Exclude all files or objects from the command that matches the specified pattern.")
+
+    command.Flags().StringVar(
+        &flagRequestPayer,
+        "request-payer",
+        "",
+        "Confirms that the requester knows that she or he will be charged for the request.")
+
+    command.Flags().StringVar(
+        &flagACL,
+        "acl",
+        "",
+        "Sets the ACL for the object when the command is performed.")
+
+    command.Flags().BoolVar(
+        &flagOnlyShowErrors,
+        "only-show-errors",
+        false,
+        "Only errors and warnings are displayed. All other output is suppressed.")
+
+    command.Flags().StringVar(
+        &flagContentDisposition,
+        "content-disposition",
+        "",
+        "Specifies presentational information for the object.")
+
+    command.Flags().StringVar(
+        &flagContentEncoding,
+        "content-encoding",
+        "",
+        "Specifies what content encodings have been applied to the object.")
+
+    command.Flags().StringVar(
+        &flagContentLanguage,
+        "content-language",
+        "",
+        "The language the content is in.")
+
+    command.Flags().StringVar(
+        &flagContentType,
+        "content-type",
+        "",
+        "Specify an explicit content type for this operation. This value overrides any guessed mime types.")
+
+    command.Flags().IntVar(
+        &flagConcurrency,
+        "concurrency",
+        1,
+        "Number of concurrent workers (e.g., goroutines) to spin up.")
 }

@@ -182,8 +182,9 @@ func(c *Client) DownloadObject(object ObjectInfo, targetPrefix string, options *
     defer file.Close()
 
     _, err = c.downloader.Download(file, &s3.GetObjectInput{
-        Bucket: aws.String(options.Source.Bucket),
-        Key:    aws.String(*object.Key),
+        Bucket:       aws.String(options.Source.Bucket),
+        Key:          aws.String(*object.Key),
+        RequestPayer: aws.String(options.RequestPayer),
     })
 
     if err != nil {
@@ -221,9 +222,15 @@ func(c *Client) UploadObject(object ObjectInfo, targetPrefix string, options *Mo
     defer file.Close()
 
     _, err = c.uploader.Upload(&s3manager.UploadInput{
-        Bucket:     aws.String(options.Target.Bucket),
-        Key:        aws.String(targetPrefix),
-        Body:       file,
+        Bucket:             aws.String(options.Target.Bucket),
+        Key:                aws.String(targetPrefix),
+        Body:               file,
+        ACL:                aws.String(options.ACL),
+        ContentDisposition: aws.String(options.ContentDisposition),
+        ContentEncoding:    aws.String(options.ContentEncoding),
+        ContentType:        aws.String(options.ContentType),
+        ContentLanguage:    aws.String(options.ContentLanguage),
+        RequestPayer:       aws.String(options.RequestPayer),
     })
 
     if err != nil {
@@ -254,9 +261,15 @@ func(c *Client) CopyObject(object ObjectInfo, targetPrefix string, options *Move
     }
 
     _, err := c.svc.CopyObject(&s3.CopyObjectInput{
-        CopySource: aws.String(object.Path()),
-        Bucket:     aws.String(options.Target.Bucket),
-        Key:        aws.String(targetPrefix),
+        CopySource:         aws.String(object.Path()),
+        Bucket:             aws.String(options.Target.Bucket),
+        Key:                aws.String(targetPrefix),
+        ACL:                aws.String(options.ACL),
+        ContentDisposition: aws.String(options.ContentDisposition),
+        ContentEncoding:    aws.String(options.ContentEncoding),
+        ContentType:        aws.String(options.ContentType),
+        ContentLanguage:    aws.String(options.ContentLanguage),
+        RequestPayer:       aws.String(options.RequestPayer),
     })
 
     if err != nil {
@@ -264,8 +277,9 @@ func(c *Client) CopyObject(object ObjectInfo, targetPrefix string, options *Move
     }
 
     err = c.svc.WaitUntilObjectExists(&s3.HeadObjectInput{
-        Bucket: aws.String(options.Target.Bucket),
-        Key:    aws.String(targetPrefix),
+        Bucket:       aws.String(options.Target.Bucket),
+        Key:          aws.String(targetPrefix),
+        RequestPayer: aws.String(options.RequestPayer),
     })
 
     if err != nil {
@@ -284,12 +298,17 @@ func(c *Client) CopyObject(object ObjectInfo, targetPrefix string, options *Move
 }
 
 type MoveObjectOptions struct {
-    Target       *S3Url
-    Source       *S3Url
-    DryRun       bool
-    Recursive    bool
-    RequestPayer string
-    DeleteAfter  bool
+    Target             *S3Url
+    Source             *S3Url
+    ACL                string
+    ContentDisposition string
+    ContentEncoding    string
+    ContentLanguage    string
+    ContentType        string
+    DeleteAfter        bool
+    DryRun             bool
+    Recursive          bool
+    RequestPayer       string
 }
 
 func(c *Client) MoveObject(object ObjectInfo, options *MoveObjectOptions) (string, error) {

@@ -80,7 +80,7 @@ func removeCommandWorker(client *s3go.Client, input *removeCommandWorkerInput) <
                         }
                     }
 
-                    if err == nil && !flagQuiet {
+                    if err == nil && !flagQuiet && !flagOnlyShowErrors {
                         s3go.Echo("%sdelete: s3://%s/%s", dryRunPrefix, *item.Bucket, *item.Key)
                     }
             }
@@ -125,6 +125,12 @@ func init() {
         "request-payer",
         "",
         "Confirms that the requester knows that she or he will be charged for the request.")
+
+    removeCommand.Flags().BoolVar(
+        &flagOnlyShowErrors,
+        "only-show-errors",
+        false,
+        "Only errors and warnings are displayed. All other output is suppressed.")
 
     removeCommand.Flags().IntVar(
         &flagConcurrency,
