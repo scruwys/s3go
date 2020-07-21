@@ -39,12 +39,12 @@ func createFile(path string) (*os.File, error) {
 func listFiles(rootPath string, recursive bool, excludeFilter string, includeFilter string) (ch <-chan ObjectInfo, err error) {
     outputCh := make(chan ObjectInfo)
 
-    excludeRe, err := regexpCompile(excludeFilter, "$^")
+    excludeRe, err := RegexpCompile(excludeFilter, "$^")
     if err != nil {
         return nil, err
     }
 
-    includeRe, err := regexpCompile(includeFilter, ".*")
+    includeRe, err := RegexpCompile(includeFilter, ".*")
     if err != nil {
         return nil, err
     }

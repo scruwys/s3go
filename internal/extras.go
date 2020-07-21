@@ -17,6 +17,7 @@ func ExitWithError(code int, err error) {
 	os.Exit(code)
 }
 
+// Converts an integer to a human-readable byte size, like 12.0 KiB or 5.4 GiB
 func HumanizeBytes(b int64) string {
     const unit = 1024
     if b < unit {
@@ -30,6 +31,7 @@ func HumanizeBytes(b int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+// Converts an int64 to a string. Also will apply HumanBytes if asked nicely.
 func ByteSizeToString(size int64, isflagHumanReadable bool) string {
     sz := strconv.FormatInt(size, 10)
     if isflagHumanReadable {
@@ -69,14 +71,15 @@ func MergeWaitWithObjectInfo(done <-chan bool, channels ...<-chan ObjectInfo) <-
     return out
 }
 
-func regexpCompile(pattern, defaultTo string) (*regexp.Regexp, error) {
+// Helper method to compile a regular expression with a default pattern (if none is provided)
+func RegexpCompile(pattern, defaultTo string) (*regexp.Regexp, error) {
     if pattern == "" {
         pattern = defaultTo
     }
     return regexp.Compile(pattern)
 }
 
-func min(a, b int) int {
+func IntMin(a, b int) int {
     if a < b {
         return a
     }

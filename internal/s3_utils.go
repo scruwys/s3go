@@ -14,13 +14,13 @@ const (
 )
 
 type S3Url struct {
-	// ok
+	// The proto scheme of the URL. Should usually be only S3 or blank.
 	Scheme  string
 
-	// ok
+    // The name of the Amazon S3 bucket
 	Bucket  string
 
-	// ok
+    // The prefix of the S3 object / path
 	Prefix  string
 }
 
@@ -80,7 +80,7 @@ func buildTargetPrefix(targetPrefix, sourcePrefix, objectKey string, recursive b
     }
 
     if recursive {
-	    substr := min(len(sourcePrefix), len(dir))
+	    substr := IntMin(len(sourcePrefix), len(dir))
         targetPrefix = strings.TrimRight(targetPrefix, "/") + "/" + dir[substr:]
     }
 

@@ -423,12 +423,12 @@ func(c *Client) ListObjectsV2(options *ListObjectsV2Input) (ch <-chan ObjectInfo
         Delimiter: aws.String(delimiter),
     }
 
-    excludeRe, err := regexpCompile(options.ExcludeFilter, "$^")
+    excludeRe, err := RegexpCompile(options.ExcludeFilter, "$^")
     if err != nil {
         return nil, err
     }
 
-    includeRe, err := regexpCompile(options.IncludeFilter, ".*")
+    includeRe, err := RegexpCompile(options.IncludeFilter, ".*")
     if err != nil {
         return nil, err
     }
